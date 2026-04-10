@@ -234,88 +234,117 @@
         </div>
 
     </div>
+    
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getFirestore, collection, setDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // setDoc 등 필요한 모듈을 추가했습니다.
-        import { getFirestore, collection, setDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    const firebaseConfig = {
+        apiKey: "AIzaSyDi7Foz2uy6ehTq6DVtqXYHx38oADjDxmc",
+        authDomain: "quiz-a62b6.firebaseapp.com",
+        projectId: "quiz-a62b6",
+        storageBucket: "quiz-a62b6.firebasestorage.app",
+        messagingSenderId: "820572663251",
+        appId: "1:820572663251:web:1a6c6900b47276244bd326"
+    };
 
-        // ==========================================
-        // 🚀 FIREBASE 설정 
-        // ==========================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyDi7Foz2uy6ehTq6DVtqXYHx38oADjDxmc",
-            authDomain: "quiz-a62b6.firebaseapp.com",
-            projectId: "quiz-a62b6",
-            storageBucket: "quiz-a62b6.firebasestorage.app",
-            messagingSenderId: "820572663251",
-            appId: "1:820572663251:web:1a6c6900b47276244bd326"
-        };
+    // Firebase 초기화 및 전역 참조 안정화
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    window.db = db;
 
-        let db = null;
+    // 1. 데이터 불러오기 보완 (생성 순서 정렬 추가)
+    window.fetchQuizzesFromDB = async () => {
+        if (!window.db) return [];
         try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            console.log("Firebase가 성공적으로 연결되었습니다.");
+            // ID(생성시간) 순으로 정렬하여 불러오기
+            const q = query(collection(window.db, "quizzes"), orderBy("id", "desc"));
+            const querySnapshot = await getDocs(q);
+            const fetchedQuizzes = [];
+            querySnapshot.forEach((docSnap) => {
+                fetchedQuizzes.push(docSnap.data());
+            });
+            return fetchedQuizzes;
         } catch (error) {
-            console.error("Firebase 초기화 에러:", error);
+            console.error("데이터 불러오기 실패:", error);
+            return null; 
         }
+    };
 
-        window.db = db;
+    // 2. 데이터 저장/수정 통합 (에러 핸들링 강화)
+    window.saveQuizToDB = async (quizData) => {
+        if (!window.db) return false;
+        try {
+            // doc ID를 강제로 문자열로 변환하여 유실 방지
+            const docRef = doc(window.db, "quizzes", String(quizData.id));
+            await setDoc(docRef, quizData, { merge: true }); // merge: true로 안전하게 덮어쓰기
+            return true;
+        } catch (error) {
+            console.error("데이터 저장 실패:", error);
+            return false;
+        }
+    };
+
+    // 3. 데이터 삭제 보완
+    window.deleteQuizFromDB = async (id) => {
+        if (!window.db) return false;
+        try {
+            await deleteDoc(doc(window.db, "quizzes", String(id)));
+            return true;
+        } catch (error) {
+            console.error("데이터 삭제 실패:", error);
+            return false;
+        }
+    };
+
+    // 앱 시작 시 데이터 로드 실행
+    window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<script>
+    // 기존 window.onload 내부의 fetch 부분 보완
+    window.onload = async () => {
+        const select = document.getElementById('creator-name-select');
+        studentNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name; opt.innerText = name;
+            select.appendChild(opt);
+        });
         
-        // 데이터 불러오기
-        window.fetchQuizzesFromDB = async () => {
-            if (!window.db) return null;
-            try {
-                const querySnapshot = await getDocs(collection(window.db, "quizzes"));
-                const fetchedQuizzes = [];
-                querySnapshot.forEach((docSnap) => {
-                    fetchedQuizzes.push(docSnap.data());
-                });
-                return fetchedQuizzes;
-            } catch (error) {
-                console.error("데이터 불러오기 실패:", error);
-                return null;
-            }
-        };
+        // 데이터 로딩 로직을 별도 함수로 분리하여 안전하게 실행
+        await refreshData();
+        renderQuestionInputs();
+    };
 
-        // 데이터 저장하기 (ID 매칭을 위해 setDoc 사용)
-        window.saveQuizToDB = async (quizData) => {
-            if (!window.db) return null;
-            try {
-                await setDoc(doc(window.db, "quizzes", quizData.id.toString()), quizData);
-                return quizData.id;
-            } catch (error) {
-                console.error("데이터 저장 실패:", error);
-                return null;
-            }
-        };
-
-        // 데이터 수정하기
-        window.updateQuizInDB = async (id, updatedData) => {
-            if (!window.db) return false;
-            try {
-                const docRef = doc(window.db, "quizzes", id.toString());
-                await updateDoc(docRef, updatedData);
-                return true;
-            } catch (error) {
-                console.error("데이터 수정 실패:", error);
-                return false;
-            }
-        };
-        
-        // 데이터 삭제하기
-        window.deleteQuizFromDB = async (id) => {
-            if (!window.db) return false;
-            try {
-                await deleteDoc(doc(window.db, "quizzes", id.toString()));
-                return true;
-            } catch (error) {
-                console.error("데이터 삭제 실패:", error);
-                return false;
+    async function refreshData() {
+        if (window.fetchQuizzesFromDB) {
+            const dbQuizzes = await window.fetchQuizzesFromDB();
+            if (dbQuizzes !== null) {
+                quizzes = dbQuizzes; // 성공했을 때만 로컬 리스트 교체
+                console.log("최신 데이터 동기화 완료");
+            } else {
+                alert("데이터를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.");
             }
         }
-    </script>
+    }
+
+    // saveFullQuiz 함수 내부 보완 (저장 후 반드시 전체 리스트 갱신)
+    async function saveFullQuiz() {
+        // ... (기존 입력 검증 로직 동일)
+
+        // Firebase 저장 시도
+        const success = await window.saveQuizToDB(quizData);
+        
+        if (success) {
+            alert(editingQuizId ? '성공적으로 수정되었습니다.' : '퀴즈가 성공적으로 등록되었습니다!');
+            await refreshData(); // 저장 후 DB에서 다시 긁어와서 로컬 변수(quizzes) 일치시킴
+            if (editingQuizId) showAdminDashboard();
+            closeCreateModal();
+        } else {
+            alert('서버 저장에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    }
+</script>
 
     <script>
         // --- CONSTANTS ---
